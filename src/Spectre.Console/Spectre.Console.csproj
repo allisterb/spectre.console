@@ -10,7 +10,10 @@
     <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
   </PropertyGroup>
   <ItemGroup Label="REMOVE THIS">
-    <InternalsVisibleTo Include="$(AssemblyName).Tests"/>
+    <InternalsVisibleTo Include="$(AssemblyName).Tests"/>   
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Jumbee.Console"/>
   </ItemGroup>
 
@@ -22,10 +25,6 @@
   <ItemGroup Label="Dependencies">
     <PackageReference Include="Wcwidth.Sources">
       <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="PolySharp">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
   </ItemGroup>
 
