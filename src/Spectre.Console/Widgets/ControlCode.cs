@@ -30,4 +30,14 @@ public sealed class ControlCode : Renderable
             yield return _segment;
         }
     }
+
+    /// <summary>
+    /// An empty return value.
+    /// </summary>
+    public static readonly ControlCode Empty = new ControlCode(string.Empty);
+
+    /// <summary>
+    /// A carriage return.
+    /// </summary>
+    public static readonly ControlCode Cr = new ControlCode("\r");
 }
