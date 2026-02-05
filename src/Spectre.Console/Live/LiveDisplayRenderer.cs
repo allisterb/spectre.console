@@ -21,14 +21,16 @@ internal sealed class LiveDisplayRenderer : IRenderHook
         {
             if (autoclear)
             {
-                _console.Write(_context.Live.RestoreCursor());
+                //_console.Write(_context.Live.RestoreCursor());
+                _console.Clear();
             }
             else
             {
                 if (_context.Live.HasRenderable && _context.Live.DidOverflow)
                 {
                     // Redraw the whole live renderable
-                    _console.Write(_context.Live.RestoreCursor());
+                    //_console.Write(_context.Live.RestoreCursor());
+                    _console.Clear();
                     _context.Live.Overflow = VerticalOverflow.Visible;
                     _console.Write(_context.Live.Target);
                 }
