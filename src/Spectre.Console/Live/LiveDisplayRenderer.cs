@@ -22,7 +22,7 @@ internal sealed class LiveDisplayRenderer : IRenderHook
             if (autoclear)
             {
                 //_console.Write(_context.Live.RestoreCursor());
-                _console.Clear();
+                _console.Clear(true);
             }
             else
             {
@@ -30,7 +30,7 @@ internal sealed class LiveDisplayRenderer : IRenderHook
                 {
                     // Redraw the whole live renderable
                     //_console.Write(_context.Live.RestoreCursor());
-                    _console.Clear();
+                    _console.Clear(true);
                     _context.Live.Overflow = VerticalOverflow.Visible;
                     _console.Write(_context.Live.Target);
                 }
@@ -38,7 +38,7 @@ internal sealed class LiveDisplayRenderer : IRenderHook
                 _console.WriteLine();
             }
 
-            _console.Cursor.Show();
+            //_console.Cursor.Show();
         }
     }
 

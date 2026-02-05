@@ -54,7 +54,7 @@ internal sealed class LiveRenderable : Renderable
                 // Important reset shape, so the size can shrink
                 _shape = null;
                 // return new ControlCode(ED(2) + ED(3) + CUP(1, 1));
-                _console.Clear();
+                _console.Clear(true);                
                 return new ControlCode(string.Empty);
             }
 
@@ -63,8 +63,7 @@ internal sealed class LiveRenderable : Renderable
             if (linesToMoveUp > 0)
             {                
                 _console.Cursor.MoveUp(linesToMoveUp);
-            }
-            _console.Cursor.SetPosition(0, 0);
+            }      
             return new ControlCode(string.Empty);
         }
     }
@@ -82,6 +81,7 @@ internal sealed class LiveRenderable : Renderable
             var linesToClear = _shape.Value.Height - 1;
             return new ControlCode("\r" + EL(2) + (CUU(1) + EL(2)).Repeat(linesToClear));
             */
+            _console.Clear(true);
             return new ControlCode(string.Empty);
         }
     }
