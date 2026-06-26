@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
-    <DefineConstants>$(DefineConstants)TRACE;WCWIDTH_VISIBILITY_INTERNAL</DefineConstants>
+    <DefineConstants>$(DefineConstants)TRACE;WCWIDTH_VISIBILITY_INTERNAL;WCWIDTH</DefineConstants>
   </PropertyGroup>
  
 
