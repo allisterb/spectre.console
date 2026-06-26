@@ -12,8 +12,14 @@
   </ItemGroup>
 
   <ItemGroup Label="Standard Figlet font">
-    <EmbeddedResource Include="Widgets\Figlet\Fonts\Standard.flf"/>
-    <None Remove="Widgets\Figlet\Fonts\Standard.flf"/>
+    <EmbeddedResource Include="Widgets\Figlet\Fonts\Standard.flf" />
+    <None Remove="Widgets\Figlet\Fonts\Standard.flf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Wcwidth.Sources" PrivateAssets="all" />
+    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="Polyfill" Condition="'$(TargetFramework)' == 'netstandard2.0'" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup Label="Dependencies">

@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace Spectre.Console;
 
 /// <summary>
@@ -15,10 +13,7 @@ public static partial class AnsiConsole
     /// <returns>The prompt input result.</returns>
     public static T Prompt<T>(IPrompt<T> prompt)
     {
-        if (prompt is null)
-        {
-            throw new ArgumentNullException(nameof(prompt));
-        }
+        ArgumentNullException.ThrowIfNull(prompt);
 
         return prompt.Show(Console);
     }
@@ -32,10 +27,7 @@ public static partial class AnsiConsole
     /// <returns>The prompt input result.</returns>
     public static Task<T> PromptAsync<T>(IPrompt<T> prompt, CancellationToken cancellationToken = default)
     {
-        if (prompt is null)
-        {
-            throw new ArgumentNullException(nameof(prompt));
-        }
+        ArgumentNullException.ThrowIfNull(prompt);
 
         return prompt.ShowAsync(Console, cancellationToken);
     }
