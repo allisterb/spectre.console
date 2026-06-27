@@ -22,11 +22,4 @@
     <PackageReference Include="Polyfill" Condition="'$(TargetFramework)' == 'netstandard2.0'" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup Label="Dependencies">
-    <PackageReference Include="Wcwidth.Sources">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-  </ItemGroup>
-
-
 </Project>
