@@ -11,7 +11,11 @@ internal static class MarkupParser
         var result = new Paragraph();
         using var tokenizer = new MarkupTokenizer(text);
 
-        var stack = new Stack<Style>();
+        // Track the effective (combined) style incrementally: `effective` is the base style combined with every
+        // currently-open tag, and `restore` holds the style to roll back to on each close. This replaces
+        // style.Combine(stack.Reverse()) on every text token (a LINQ allocation plus a full re-fold each time).
+        var restore = new Stack<Style>();
+        var effective = style;
 
         while (tokenizer.MoveNext())
         {
@@ -24,22 +28,21 @@ internal static class MarkupParser
             if (token.Kind == MarkupTokenKind.Open)
             {
                 var parsedStyle = string.IsNullOrEmpty(token.Value) ? Style.Plain : StyleParser.Parse(token.Value);
-                stack.Push(parsedStyle);
+                restore.Push(effective);
+                effective = effective.Combine(parsedStyle);
             }
             else if (token.Kind == MarkupTokenKind.Close)
             {
-                if (stack.Count == 0)
+                if (restore.Count == 0)
                 {
                     throw new InvalidOperationException($"Encountered closing tag when none was expected near position {token.Position}.");
                 }
 
-                stack.Pop();
+                effective = restore.Pop();
             }
             else if (token.Kind == MarkupTokenKind.Text)
             {
-                // Get the effective style.
-                var effectiveStyle = style.Combine(stack.Reverse());
-                result.Append(Emoji.Replace(token.Value), effectiveStyle);
+                result.Append(Emoji.Replace(token.Value), effective);
             }
             else
             {
@@ -47,7 +50,7 @@ internal static class MarkupParser
             }
         }
 
-        if (stack.Count > 0)
+        if (restore.Count > 0)
         {
             throw new InvalidOperationException("Unbalanced markup stack. Did you forget to close a tag?");
         }

@@ -120,13 +120,13 @@ internal sealed class MarkupTokenizer : IDisposable
         var builder = new StringBuilder();
         var encounteredOpening = false;
         var encounteredClosing = false;
+        var wordStart = 0;   // index in `builder` where the current space-delimited style part begins
         while (!_reader.Eof)
         {
-            var currentStylePartCanContainMarkup =
-                builder.ToString()
-                .Split(' ')
-                .Last()
-                .StartsWith("link=", StringComparison.OrdinalIgnoreCase);
+            // Whether the current style part is a "link=" (whose value may contain [ and ] that must be escaped).
+            // Checked incrementally against `builder` rather than rebuilding builder.ToString().Split(' ').Last()
+            // every character, which was O(n^2) in time and allocations for each markup tag.
+            var currentStylePartCanContainMarkup = StartsWithLink(builder, wordStart);
             current = _reader.Peek();
 
             if (currentStylePartCanContainMarkup)
@@ -184,7 +184,13 @@ internal sealed class MarkupTokenizer : IDisposable
                     $"Encountered malformed markup tag at position {_reader.Position - 1}.");
             }
 
-            builder.Append(_reader.Read());
+            var ch = _reader.Read();
+            builder.Append(ch);
+            if (ch == ' ')
+            {
+                // Next space-delimited style part starts after this space.
+                wordStart = builder.Length;
+            }
         }
 
         if (_reader.Eof)
@@ -193,6 +199,34 @@ internal sealed class MarkupTokenizer : IDisposable
         }
 
         Current = new MarkupToken(MarkupTokenKind.Open, builder.ToString(), position);
+        return true;
+    }
+
+    // Case-insensitive test for the "link=" prefix at <paramref name="wordStart"/> in <paramref name="builder"/>,
+    // matching the original builder.ToString().Split(' ').Last().StartsWith("link=", OrdinalIgnoreCase) without
+    // allocating. The markup keyword is ASCII, so ordinal lowercasing of A-Z suffices.
+    private static bool StartsWithLink(StringBuilder builder, int wordStart)
+    {
+        const string prefix = "link=";
+        if (builder.Length - wordStart < prefix.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < prefix.Length; i++)
+        {
+            var c = builder[wordStart + i];
+            if (c is >= 'A' and <= 'Z')
+            {
+                c = (char)(c + 32);
+            }
+
+            if (c != prefix[i])
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 }

@@ -28,7 +28,6 @@ public static partial class Emoji
         _remappings[tag] = emoji;
     }
 
-#if NETSTANDARD2_0
     /// <summary>
     /// Replaces emoji markup with corresponding unicode characters.
     /// </summary>
@@ -36,9 +35,17 @@ public static partial class Emoji
     /// <returns>A string with emoji codes replaced with actual emoji.</returns>
     public static string Replace(string value)
     {
+        ArgumentNullException.ThrowIfNull(value);
+
+        // Fast path: no colon means no emoji code, so return the original instance. The span overload would
+        // otherwise allocate a copy via value.ToString(); markup text tokens are usually emoji-free.
+        if (value.IndexOf(':') < 0)
+        {
+            return value;
+        }
+
         return Replace(value.AsSpan());
     }
-#endif
 
     /// <summary>
     /// Replaces emoji markup with corresponding unicode characters.
