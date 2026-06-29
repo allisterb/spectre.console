@@ -8,7 +8,21 @@ public sealed class SegmentLine : List<Segment>
     /// <summary>
     /// Gets the width of the line.
     /// </summary>
-    public int Length => this.Sum(line => line.Text.Length);
+    public int Length
+    {
+        get
+        {
+            // Sum of segment text lengths (character count, not cell width). A plain loop avoids the LINQ delegate
+            // allocation on this property, which is read inside Segment.SplitLines' per-segment loop.
+            var sum = 0;
+            for (var i = 0; i < Count; i++)
+            {
+                sum += this[i].Text.Length;
+            }
+
+            return sum;
+        }
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SegmentLine"/> class.

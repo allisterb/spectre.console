@@ -50,7 +50,26 @@ public class Segment
     /// </summary>
     /// <param name="size">Number of whitespace characters.</param>
     /// <returns>Segment for specified padding size.</returns>
-    public static Segment Padding(int size) => new(new string(' ', size));
+    public static Segment Padding(int size) => new(Whitespace(size));
+
+    // Cache of all-space strings for common padding widths so padding (emitted on every table/panel row) doesn't
+    // allocate a fresh string each time. Widths past the cache fall back to a one-off allocation. Strings are
+    // immutable so sharing instances is safe.
+    private static readonly string[] _whitespaceCache = BuildWhitespaceCache(256);
+
+    private static string[] BuildWhitespaceCache(int count)
+    {
+        var cache = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            cache[i] = new string(' ', i);
+        }
+
+        return cache;
+    }
+
+    internal static string Whitespace(int size)
+        => (uint)size < (uint)_whitespaceCache.Length ? _whitespaceCache[size] : new string(' ', size);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Segment"/> class.
@@ -203,8 +222,25 @@ public class Segment
 
         var lines = new List<SegmentLine>();
         var line = new SegmentLine();
+        var lineLength = 0;   // running cell width of `line`, so we don't re-sum line.CellCount() each iteration
 
-        var stack = new Stack<Segment>(segments.Reverse());
+        // Fill the work stack so popping yields the original order. For the common indexable case this avoids the
+        // extra buffering of LINQ Reverse (which materializes the whole sequence before the stack copies it).
+        var stack = new Stack<Segment>();
+        if (segments is IList<Segment> indexable)
+        {
+            for (var i = indexable.Count - 1; i >= 0; i--)
+            {
+                stack.Push(indexable[i]);
+            }
+        }
+        else
+        {
+            foreach (var segment in segments.Reverse())
+            {
+                stack.Push(segment);
+            }
+        }
 
         while (stack.Count > 0)
         {
@@ -212,7 +248,6 @@ public class Segment
             var segmentLength = segment.CellCount();
 
             // Does this segment make the line exceed the max width?
-            var lineLength = line.CellCount();
             if (lineLength + segmentLength > maxWidth)
             {
                 var diff = -(maxWidth - (lineLength + segmentLength));
@@ -223,6 +258,7 @@ public class Segment
                 line.Add(first);
                 lines.Add(line);
                 line = [];
+                lineLength = 0;
 
                 if (second != null)
                 {
@@ -242,6 +278,7 @@ public class Segment
                     {
                         lines.Add(line);
                         line = [];
+                        lineLength = 0;
                     }
 
                     continue;
@@ -267,17 +304,24 @@ public class Segment
                             line = [];
                         }
 
-                        text = string.Concat(parts.Skip(1).Take(parts.Length - 1));
+                        // Concatenate the remaining parts (without separators, matching the original behavior),
+                        // avoiding the LINQ Skip/Take iterators.
+                        text = string.Join(string.Empty, parts, 1, parts.Length - 1);
                     }
                     else
                     {
                         text = null;
                     }
                 }
+
+                // This branch rebuilds `line` through several adds/resets; recompute its width once here rather than
+                // tracking each mutation (it only runs for segments containing a newline).
+                lineLength = line.CellCount();
             }
             else
             {
                 line.Add(segment);
+                lineLength += segmentLength;
             }
         }
 
@@ -556,7 +600,7 @@ public class Segment
             if (width < expectedWidth)
             {
                 var diff = expectedWidth - width;
-                line.Add(new Segment(new string(' ', diff)));
+                line.Add(new Segment(Whitespace(diff)));
             }
         }
 
