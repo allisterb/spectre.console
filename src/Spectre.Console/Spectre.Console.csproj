@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Jumbee.Console"/>
+    <InternalsVisibleTo Include="Spectre.Console.Tests"/>
   </ItemGroup>
 
   <ItemGroup Label="Standard Figlet font">

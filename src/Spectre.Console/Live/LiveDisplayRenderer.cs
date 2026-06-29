@@ -46,6 +46,18 @@ internal sealed class LiveDisplayRenderer : IRenderHook
     {
         lock (_context.Lock)
         {
+            // Re-entered by the internal cursor/clear writes PositionCursor performs on a real ANSI backend:
+            // pass them through untouched so we neither recurse nor re-render the live content.
+            if (_context.Live.SuppressRenderHook)
+            {
+                foreach (var renderable in renderables)
+                {
+                    yield return renderable;
+                }
+
+                yield break;
+            }
+
             yield return _context.Live.PositionCursor(options);
 
             foreach (var renderable in renderables)

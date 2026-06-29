@@ -8,9 +8,19 @@ internal sealed class LiveRenderable : Renderable
     private readonly IAnsiConsole _console;
     private IRenderable? _renderable;
     private SegmentShape? _shape;
+    private bool _suppressRenderHook;
 
     public IRenderable? Target => _renderable;
     public bool DidOverflow { get; private set; }
+
+    /// <summary>
+    /// True while <see cref="PositionCursor"/> is driving the console's cursor/clear methods. On a real ANSI
+    /// backend those calls turn into writes that re-enter the render pipeline (and the live render hook); the hook
+    /// checks this flag and passes those internal writes through untouched, so it neither recurses into
+    /// <see cref="PositionCursor"/> nor re-renders the live content. On the Jumbee buffer console the cursor moves
+    /// without writing through the pipeline, so the flag is simply never observed there.
+    /// </summary>
+    public bool SuppressRenderHook => _suppressRenderHook;
 
     [MemberNotNullWhen(true, nameof(Target))]
     public bool HasRenderable => _renderable != null;
@@ -48,22 +58,32 @@ internal sealed class LiveRenderable : Renderable
                 return ControlCode.Empty;
             }
 
-            // Check if the size have been reduced
-            if (_shape.Value.Height > options.ConsoleSize.Height || _shape.Value.Width > options.ConsoleSize.Width)
+            // Driving the console cursor/clear below re-enters the render pipeline on a real ANSI backend; suppress
+            // the hook for the duration so those internal writes pass through instead of recursing / re-rendering.
+            _suppressRenderHook = true;
+            try
             {
-                // Important reset shape, so the size can shrink
-                _shape = null;
-                _console.Clear(true);
-                return ControlCode.Empty;
-            }
+                // Check if the size have been reduced
+                if (_shape.Value.Height > options.ConsoleSize.Height || _shape.Value.Width > options.ConsoleSize.Width)
+                {
+                    // Important reset shape, so the size can shrink
+                    _shape = null;
+                    _console.Clear(true);
+                    return ControlCode.Empty;
+                }
 
-            var linesToMoveUp = _shape.Value.Height - 1;
-            if (linesToMoveUp > 0)
+                var linesToMoveUp = _shape.Value.Height - 1;
+                if (linesToMoveUp > 0)
+                {
+                    _console.Cursor.MoveUp(linesToMoveUp);
+                }
+
+                return ControlCode.Cr;
+            }
+            finally
             {
-                _console.Cursor.MoveUp(linesToMoveUp);
+                _suppressRenderHook = false;
             }
-
-            return ControlCode.Cr;
         }
     }
 

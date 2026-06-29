@@ -418,16 +418,21 @@ public class Segment
             return segment;
         }
 
+        // Accumulate the cell width incrementally. The original re-measured the whole accumulated string
+        // (builder.ToString().GetCellWidth()) on every character, making this O(n^2) in both time and allocations.
+        // Semantics are preserved: stop once the already-accumulated width reaches maxWidth, without appending the
+        // character that would exceed it.
         var builder = new StringBuilder();
+        var accumulatedCellWidth = 0;
         foreach (var character in segment.Text)
         {
-            var accumulatedCellWidth = builder.ToString().GetCellWidth();
             if (accumulatedCellWidth >= maxWidth)
             {
                 break;
             }
 
             builder.Append(character);
+            accumulatedCellWidth += Cell.GetCellLength(character);
         }
 
         if (builder.Length == 0)
@@ -586,6 +591,7 @@ public class Segment
     {
         private readonly StringBuilder _textBuilder = new();
         private Segment _originalSegment;
+        private bool _appended;
 
         public SegmentBuilder(Segment originalSegment)
         {
@@ -599,20 +605,35 @@ public class Segment
 
         public void Append(string text)
         {
+            // Defer touching the StringBuilder until something is actually merged in: seed it with the original
+            // segment's text on the first append. Until then Build() returns the original segment unchanged, so a
+            // run of a single segment (the common case) costs no StringBuilder fill and no ToString allocation.
+            if (!_appended)
+            {
+                _textBuilder.Clear();
+                _textBuilder.Append(_originalSegment.Text);
+                _appended = true;
+            }
+
             _textBuilder.Append(text);
         }
 
         public Segment Build()
         {
+            // Nothing was merged into this segment — return the original instance instead of re-stringifying it.
+            if (!_appended)
+            {
+                return _originalSegment;
+            }
+
             return new Segment(_textBuilder.ToString(), _originalSegment.Style, _originalSegment.IsLineBreak,
                 _originalSegment.IsControlCode);
         }
 
         public void Reset(Segment segment)
         {
-            _textBuilder.Clear();
-            _textBuilder.Append(segment.Text);
             _originalSegment = segment;
+            _appended = false;
         }
     }
 }

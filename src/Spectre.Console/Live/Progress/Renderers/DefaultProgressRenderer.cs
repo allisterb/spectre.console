@@ -118,6 +118,18 @@ internal sealed class DefaultProgressRenderer : ProgressRenderer
     {
         lock (_lock)
         {
+            // Re-entered by the internal cursor/clear writes PositionCursor performs on a real ANSI backend:
+            // pass them through untouched so we neither recurse nor re-render the live content.
+            if (_live.SuppressRenderHook)
+            {
+                foreach (var renderable in renderables)
+                {
+                    yield return renderable;
+                }
+
+                yield break;
+            }
+
             yield return _live.PositionCursor(options);
 
             foreach (var renderable in renderables)
