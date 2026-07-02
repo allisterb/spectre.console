@@ -29,10 +29,10 @@ public class Segment
     }
 
     /// <summary>Gets the segment text as a span, without allocating.</summary>
-    internal ReadOnlySpan<char> TextSpan => _text.Span;
+    public ReadOnlySpan<char> TextSpan => _text.Span;
 
     /// <summary>Gets the segment text as a (possibly sliced) <see cref="ReadOnlyMemory{T}"/> over its source.</summary>
-    internal ReadOnlyMemory<char> TextMemory => _text;
+    public ReadOnlyMemory<char> TextMemory => _text;
 
     /// <summary>
     /// Gets a value indicating whether or not this is an explicit line break
@@ -123,9 +123,10 @@ public class Segment
         IsControlCode = control;
     }
 
-    // Zero-copy constructor for text that is already normalized and is a slice of an existing segment's source
-    // (Split/Truncate/StripLineEndings/SplitOverflow). Skips the normalize/allocate the string constructor does.
-    private Segment(ReadOnlyMemory<char> text, Style style, bool lineBreak, bool control)
+    // Zero-copy constructor for text that is already normalized and is a slice of an existing string's memory
+    // (Split/Truncate/StripLineEndings/SplitOverflow, and Paragraph.Append word slices). Skips the
+    // normalize/allocate the string constructor does.
+    internal Segment(ReadOnlyMemory<char> text, Style style, bool lineBreak, bool control)
     {
         _text = text;
         Style = style ?? throw new ArgumentNullException(nameof(style));
@@ -550,7 +551,7 @@ public class Segment
             // Both control codes?
             if (segment.IsControlCode && segmentBuilder.IsControlCode())
             {
-                segmentBuilder.Append(segment.Text);
+                segmentBuilder.Append(segment);
                 continue;
             }
 
@@ -558,7 +559,7 @@ public class Segment
             if (segmentBuilder.StyleEquals(segment.Style) && !segmentBuilder.IsLineBreak() &&
                 !segmentBuilder.IsControlCode())
             {
-                segmentBuilder.Append(segment.Text);
+                segmentBuilder.Append(segment);
                 continue;
             }
 
@@ -718,19 +719,21 @@ public class Segment
         public bool IsLineBreak() => _originalSegment.IsLineBreak;
         public bool StyleEquals(Style segmentStyle) => segmentStyle.Equals(_originalSegment.Style);
 
-        public void Append(string text)
+        public void Append(Segment segment)
         {
             // Defer touching the StringBuilder until something is actually merged in: seed it with the original
             // segment's text on the first append. Until then Build() returns the original segment unchanged, so a
             // run of a single segment (the common case) costs no StringBuilder fill and no ToString allocation.
+            // Append the spans (not .Text) so slice-backed segments aren't materialized into strings just to be
+            // re-concatenated here.
             if (!_appended)
             {
                 _textBuilder.Clear();
-                _textBuilder.Append(_originalSegment.Text);
+                _textBuilder.Append(_originalSegment.TextSpan);
                 _appended = true;
             }
 
-            _textBuilder.Append(text);
+            _textBuilder.Append(segment.TextSpan);
         }
 
         public Segment Build()

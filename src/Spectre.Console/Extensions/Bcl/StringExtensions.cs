@@ -42,11 +42,11 @@ public static class StringExtensions
         var result = new StringBuilder();
 
         var tokenizer = new MarkupTokenizer(text);
-        while (tokenizer.MoveNext() && tokenizer.Current != null)
+        while (tokenizer.MoveNext())
         {
-            if (tokenizer.Current.Kind == MarkupTokenKind.Text)
+            if (tokenizer.Current is { Kind: MarkupTokenKind.Text } token)
             {
-                result.Append(tokenizer.Current.Value);
+                result.Append(token.Value);
             }
         }
 
@@ -105,48 +105,45 @@ public static class StringExtensions
         return result ?? [];
     }
 
+    // Splits into alternating runs of whitespace / non-whitespace as zero-copy slices of the source memory.
+    // Whitespace runs are dropped when RemoveEmptyEntries is set. This is the allocation-free core used by
+    // Paragraph.Append (a Segment per slice) on the markup write path.
+    internal static List<ReadOnlyMemory<char>> SplitWords(this ReadOnlyMemory<char> text, StringSplitOptions options = StringSplitOptions.None)
+    {
+        var result = new List<ReadOnlyMemory<char>>();
+        var span = text.Span;
+
+        var i = 0;
+        while (i < span.Length)
+        {
+            var start = i;
+            var isWhiteSpace = char.IsWhiteSpace(span[i]);
+            while (i < span.Length && char.IsWhiteSpace(span[i]) == isWhiteSpace)
+            {
+                i++;
+            }
+
+            if (isWhiteSpace && options == StringSplitOptions.RemoveEmptyEntries)
+            {
+                continue;
+            }
+
+            result.Add(text[start..i]);
+        }
+
+        return result;
+    }
+
     internal static string[] SplitWords(this string word, StringSplitOptions options = StringSplitOptions.None)
     {
-        var result = new List<string>();
-
-        static string Read(StringBuffer reader, Func<char, bool> criteria)
+        var slices = word.AsMemory().SplitWords(options);
+        var result = new string[slices.Count];
+        for (var i = 0; i < slices.Count; i++)
         {
-            var buffer = new StringBuilder();
-            while (!reader.Eof)
-            {
-                var current = reader.Peek();
-                if (!criteria(current))
-                {
-                    break;
-                }
-
-                buffer.Append(reader.Read());
-            }
-
-            return buffer.ToString();
+            result[i] = slices[i].ToString();
         }
 
-        using (var reader = new StringBuffer(word))
-        {
-            while (!reader.Eof)
-            {
-                var current = reader.Peek();
-                if (char.IsWhiteSpace(current))
-                {
-                    var x = Read(reader, c => char.IsWhiteSpace(c));
-                    if (options != StringSplitOptions.RemoveEmptyEntries)
-                    {
-                        result.Add(x);
-                    }
-                }
-                else
-                {
-                    result.Add(Read(reader, c => !char.IsWhiteSpace(c)));
-                }
-            }
-        }
-
-        return result.ToArray();
+        return result;
     }
 
     internal static string Repeat(this string text, int count)
@@ -232,7 +229,10 @@ public static class StringExtensions
         using var tokenizer = new MarkupTokenizer(value);
         while (tokenizer.MoveNext())
         {
-            var token = tokenizer.Current!;
+            if (tokenizer.Current is not { } token)
+            {
+                continue;
+            }
 
             switch (token.Kind)
             {

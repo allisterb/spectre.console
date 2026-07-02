@@ -76,9 +76,9 @@ public sealed class Paragraph : Renderable, IHasJustification, IOverflowable
                 }
                 else
                 {
-                    foreach (var span in part.SplitWords())
+                    foreach (var slice in part.AsMemory().SplitWords())
                     {
-                        line.Add(new Segment(span, style ?? Style.Plain));
+                        line.Add(new Segment(slice, style ?? Style.Plain, false, false));
                     }
                 }
             }
@@ -92,9 +92,9 @@ public sealed class Paragraph : Renderable, IHasJustification, IOverflowable
                 }
                 else
                 {
-                    foreach (var span in part.SplitWords())
+                    foreach (var slice in part.AsMemory().SplitWords())
                     {
-                        line.Add(new Segment(span, style ?? Style.Plain));
+                        line.Add(new Segment(slice, style ?? Style.Plain, false, false));
                     }
                 }
 

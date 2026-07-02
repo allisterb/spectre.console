@@ -19,8 +19,7 @@ internal static class MarkupParser
 
         while (tokenizer.MoveNext())
         {
-            var token = tokenizer.Current;
-            if (token == null)
+            if (tokenizer.Current is not { } token)
             {
                 break;
             }

@@ -12,12 +12,13 @@ public sealed class SegmentLine : List<Segment>
     {
         get
         {
-            // Sum of segment text lengths (character count, not cell width). A plain loop avoids the LINQ delegate
-            // allocation on this property, which is read inside Segment.SplitLines' per-segment loop.
+            // Sum of segment text lengths (character count, not cell width). Read via TextSpan.Length so slice-backed
+            // segments (Split/Truncate, Paragraph word slices) don't materialize a substring just to measure it — this
+            // is read inside Segment.SplitLines' per-segment loop.
             var sum = 0;
             for (var i = 0; i < Count; i++)
             {
-                sum += this[i].Text.Length;
+                sum += this[i].TextSpan.Length;
             }
 
             return sum;

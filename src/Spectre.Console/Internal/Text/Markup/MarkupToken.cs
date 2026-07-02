@@ -1,10 +1,10 @@
 namespace Spectre.Console;
 
-internal sealed class MarkupToken
+internal readonly struct MarkupToken
 {
     public MarkupTokenKind Kind { get; }
     public string Value { get; }
-    public int Position { get; set; }
+    public int Position { get; }
 
     public MarkupToken(MarkupTokenKind kind, string value, int position)
     {
