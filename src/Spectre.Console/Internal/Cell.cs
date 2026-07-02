@@ -25,6 +25,11 @@ internal static class Cell
 
     public static int GetCellLength(string text)
     {
+        return GetCellLength(text.AsSpan());
+    }
+
+    public static int GetCellLength(ReadOnlySpan<char> text)
+    {
         var sum = 0;
         for (var index = 0; index < text.Length; index++)
         {

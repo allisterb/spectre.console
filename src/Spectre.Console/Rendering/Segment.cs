@@ -9,7 +9,30 @@ public class Segment
     /// <summary>
     /// Gets the segment text.
     /// </summary>
-    public string Text { get; }
+    /// <remarks>
+    /// Backed by a <see cref="ReadOnlyMemory{T}"/> slice. When the slice spans a whole source string the original
+    /// instance is returned without allocating; a genuine sub-slice is materialized on demand. Internal rendering
+    /// code should prefer <see cref="TextSpan"/> to avoid that materialization.
+    /// </remarks>
+    public string Text
+    {
+        get
+        {
+            if (System.Runtime.InteropServices.MemoryMarshal.TryGetString(_text, out var str, out var start, out var length)
+                && start == 0 && length == str.Length)
+            {
+                return str;
+            }
+
+            return _text.ToString();
+        }
+    }
+
+    /// <summary>Gets the segment text as a span, without allocating.</summary>
+    internal ReadOnlySpan<char> TextSpan => _text.Span;
+
+    /// <summary>Gets the segment text as a (possibly sliced) <see cref="ReadOnlyMemory{T}"/> over its source.</summary>
+    internal ReadOnlyMemory<char> TextMemory => _text;
 
     /// <summary>
     /// Gets a value indicating whether or not this is an explicit line break
@@ -92,12 +115,26 @@ public class Segment
 
     private Segment(string text, Style style, bool lineBreak, bool control)
     {
-        Text = text?.NormalizeNewLines() ?? throw new ArgumentNullException(nameof(text));
+        var normalized = text?.NormalizeNewLines() ?? throw new ArgumentNullException(nameof(text));
+        _text = normalized.AsMemory();
         Style = style ?? throw new ArgumentNullException(nameof(style));
         IsLineBreak = lineBreak;
-        IsWhiteSpace = string.IsNullOrWhiteSpace(text);
+        IsWhiteSpace = string.IsNullOrWhiteSpace(normalized);
         IsControlCode = control;
     }
+
+    // Zero-copy constructor for text that is already normalized and is a slice of an existing segment's source
+    // (Split/Truncate/StripLineEndings/SplitOverflow). Skips the normalize/allocate the string constructor does.
+    private Segment(ReadOnlyMemory<char> text, Style style, bool lineBreak, bool control)
+    {
+        _text = text;
+        Style = style ?? throw new ArgumentNullException(nameof(style));
+        IsLineBreak = lineBreak;
+        IsWhiteSpace = text.Span.IsWhiteSpace();
+        IsControlCode = control;
+    }
+
+    private readonly ReadOnlyMemory<char> _text;
 
     /// <summary>
     /// Creates a control segment.
@@ -121,7 +158,7 @@ public class Segment
             return 0;
         }
 
-        return Cell.GetCellLength(Text);
+        return Cell.GetCellLength(TextSpan);
     }
 
     /// <summary>
@@ -148,7 +185,20 @@ public class Segment
     /// <returns>A new segment without any trailing line endings.</returns>
     public Segment StripLineEndings()
     {
-        return new Segment(Text.TrimEnd('\n').TrimEnd('\r'), Style);
+        // Mirror TrimEnd('\n').TrimEnd('\r') (order matters) as a zero-copy slice off the end.
+        var span = _text.Span;
+        var end = span.Length;
+        while (end > 0 && span[end - 1] == '\n')
+        {
+            end--;
+        }
+
+        while (end > 0 && span[end - 1] == '\r')
+        {
+            end--;
+        }
+
+        return new Segment(_text[..end], Style, false, false);
     }
 
     /// <summary>
@@ -172,7 +222,8 @@ public class Segment
         if (offset > 0)
         {
             var accumulated = 0;
-            foreach (var character in Text)
+            var span = TextSpan;
+            foreach (var character in span)
             {
                 index++;
                 accumulated += Cell.GetCellLength(character);
@@ -184,8 +235,8 @@ public class Segment
         }
 
         return (
-            new Segment(Text.Substring(0, index), Style),
-            new Segment(Text.Substring(index, Text.Length - index), Style));
+            new Segment(_text[..index], Style, false, false),
+            new Segment(_text[index..], Style, false, false));
     }
 
     /// <summary>
@@ -251,7 +302,7 @@ public class Segment
             if (lineLength + segmentLength > maxWidth)
             {
                 var diff = -(maxWidth - (lineLength + segmentLength));
-                var offset = segment.Text.Length - diff;
+                var offset = segment.TextSpan.Length - diff;
 
                 var (first, second) = segment.Split(offset);
 
@@ -269,10 +320,10 @@ public class Segment
             }
 
             // Does the segment contain a newline?
-            if (segment.Text.ContainsExact("\n"))
+            if (segment.TextSpan.Contains('\n'))
             {
                 // Is it a new line?
-                if (segment.Text == "\n")
+                if (segment.TextSpan.Length == 1 && segment.TextSpan[0] == '\n')
                 {
                     if (line.Length != 0 || segment.IsLineBreak)
                     {
@@ -375,10 +426,9 @@ public class Segment
 
         if (overflow == Overflow.Fold)
         {
-            var splitted = SplitSegment(segment.Text, maxWidth);
-            foreach (var str in splitted)
+            foreach (var slice in SplitSegment(segment._text, maxWidth))
             {
-                result.Add(new Segment(str, segment.Style));
+                result.Add(new Segment(slice, segment.Style, false, false));
             }
         }
         else if (overflow == Overflow.Crop)
@@ -389,7 +439,7 @@ public class Segment
             }
             else
             {
-                result.Add(new Segment(segment.Text.Substring(0, maxWidth), segment.Style));
+                result.Add(new Segment(segment._text[..maxWidth], segment.Style, false, false));
             }
         }
         else if (overflow == Overflow.Ellipsis)
@@ -400,7 +450,7 @@ public class Segment
             }
             else
             {
-                result.Add(new Segment(segment.Text.Substring(0, maxWidth - 1) + "…", segment.Style));
+                result.Add(new Segment(string.Concat(segment._text.Span[..(maxWidth - 1)], "…"), segment.Style));
             }
         }
 
@@ -462,29 +512,24 @@ public class Segment
             return segment;
         }
 
-        // Accumulate the cell width incrementally. The original re-measured the whole accumulated string
-        // (builder.ToString().GetCellWidth()) on every character, making this O(n^2) in both time and allocations.
-        // Semantics are preserved: stop once the already-accumulated width reaches maxWidth, without appending the
+        // Accumulate the cell width incrementally and return a zero-copy slice of the source. Semantics are
+        // preserved: include characters until the already-accumulated width reaches maxWidth, without including the
         // character that would exceed it.
-        var builder = new StringBuilder();
+        var span = segment.TextSpan;
         var accumulatedCellWidth = 0;
-        foreach (var character in segment.Text)
+        var count = 0;
+        while (count < span.Length && accumulatedCellWidth < maxWidth)
         {
-            if (accumulatedCellWidth >= maxWidth)
-            {
-                break;
-            }
-
-            builder.Append(character);
-            accumulatedCellWidth += Cell.GetCellLength(character);
+            accumulatedCellWidth += Cell.GetCellLength(span[count]);
+            count++;
         }
 
-        if (builder.Length == 0)
+        if (count == 0)
         {
             return null;
         }
 
-        return new Segment(builder.ToString(), segment.Style);
+        return new Segment(segment._text[..count], segment.Style, false, false);
     }
 
     internal static IEnumerable<Segment> Merge(IEnumerable<Segment> segments)
@@ -605,6 +650,32 @@ public class Segment
         }
 
         return lines;
+    }
+
+    // Zero-copy variant of SplitSegment: folds text into <= maxCellLength runs as slices of the source memory.
+    internal static List<ReadOnlyMemory<char>> SplitSegment(ReadOnlyMemory<char> text, int maxCellLength)
+    {
+        var list = new List<ReadOnlyMemory<char>>();
+        var span = text.Span;
+
+        var length = 0;
+        var start = 0;
+        for (var i = 0; i < span.Length; i++)
+        {
+            var width = UnicodeCalculator.GetWidth(span[i]);
+            if (length + width > maxCellLength)
+            {
+                list.Add(text[start..i]);
+                start = i;
+                length = 0;
+            }
+
+            length += width;
+        }
+
+        list.Add(text[start..]);
+
+        return list;
     }
 
     internal static List<string> SplitSegment(string text, int maxCellLength)

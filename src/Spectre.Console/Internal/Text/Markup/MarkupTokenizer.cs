@@ -30,7 +30,12 @@ internal sealed class MarkupTokenizer : IDisposable
     private bool ReadText()
     {
         var position = _reader.Position;
-        var builder = new StringBuilder();
+
+        // Fast path: while the text contains no ']', it's a contiguous slice of the source, so we defer creating a
+        // StringBuilder entirely. The builder is only spun up on the first ']' (which needs the ']]' -> ']' collapse),
+        // seeded with the clean run scanned so far. Text tokens are usually bracket-free, so this avoids a
+        // StringBuilder + ToString allocation for the common case, emitting a single Substring instead.
+        StringBuilder? builder = null;
 
         var encounteredClosing = false;
         while (!_reader.Eof)
@@ -52,6 +57,15 @@ internal sealed class MarkupTokenizer : IDisposable
                     continue;
                 }
 
+                if (builder == null)
+                {
+                    builder = new StringBuilder();
+                    if (_reader.Position > position)
+                    {
+                        builder.Append(_reader.AsSpan(position, _reader.Position - position));
+                    }
+                }
+
                 encounteredClosing = true;
             }
             else
@@ -63,7 +77,8 @@ internal sealed class MarkupTokenizer : IDisposable
                 }
             }
 
-            builder.Append(_reader.Read());
+            var ch = _reader.Read();
+            builder?.Append(ch);
         }
 
         if (encounteredClosing)
@@ -71,7 +86,10 @@ internal sealed class MarkupTokenizer : IDisposable
             throw new InvalidOperationException($"Encountered unescaped ']' token at position {_reader.Position}");
         }
 
-        Current = new MarkupToken(MarkupTokenKind.Text, builder.ToString(), position);
+        var value = builder != null
+            ? builder.ToString()
+            : _reader.Substring(position, _reader.Position - position);
+        Current = new MarkupToken(MarkupTokenKind.Text, value, position);
         return true;
     }
 

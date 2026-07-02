@@ -2,7 +2,7 @@ namespace Spectre.Console;
 
 internal sealed class StringBuffer : IDisposable
 {
-    private readonly StringReader _reader;
+    private readonly string _text;
     private readonly int _length;
 
     public int Position { get; private set; }
@@ -10,17 +10,13 @@ internal sealed class StringBuffer : IDisposable
 
     public StringBuffer(string text)
     {
-        text ??= string.Empty;
-
-        _reader = new StringReader(text);
-        _length = text.Length;
-
+        _text = text ?? string.Empty;
+        _length = _text.Length;
         Position = 0;
     }
 
     public void Dispose()
     {
-        _reader.Dispose();
     }
 
     public char Expect(char character)
@@ -36,22 +32,22 @@ internal sealed class StringBuffer : IDisposable
 
     public char Peek()
     {
-        if (Eof)
-        {
-            return '\0';
-        }
-
-        return (char)_reader.Peek();
+        return Eof ? '\0' : _text[Position];
     }
 
     public char Read()
     {
-        if (Eof)
-        {
-            return '\0';
-        }
+        return Eof ? '\0' : _text[Position++];
+    }
 
-        Position++;
-        return (char)_reader.Read();
+    // Zero-copy view of a scanned range of the source, for slicing token text without a StringBuilder.
+    public ReadOnlySpan<char> AsSpan(int start, int length)
+    {
+        return _text.AsSpan(start, length);
+    }
+
+    public string Substring(int start, int length)
+    {
+        return _text.Substring(start, length);
     }
 }
