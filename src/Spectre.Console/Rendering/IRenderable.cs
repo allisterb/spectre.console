@@ -44,6 +44,25 @@ public static class RenderableExtensions
         return GetSegments(console, context, renderables);
     }
 
+    /// <summary>
+    /// Gets the segments for a renderable using the specified console and a pre-built <see cref="RenderOptions"/>.
+    /// </summary>
+    /// <param name="renderable">The renderable.</param>
+    /// <param name="console">The console.</param>
+    /// <param name="options">The render options to use. <see cref="RenderOptions"/> is immutable, so a caller that
+    /// renders repeatedly at a fixed size may cache and reuse one instance to avoid re-allocating it per render.</param>
+    /// <returns>An enumerable containing segments representing the specified <see cref="IRenderable"/>.</returns>
+    public static IEnumerable<Segment> GetSegments(this IRenderable renderable, IAnsiConsole console, RenderOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(console);
+        ArgumentNullException.ThrowIfNull(renderable);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var renderables = console.Pipeline.Process(options, [renderable]);
+
+        return GetSegments(console, options, renderables);
+    }
+
     private static IEnumerable<Segment> GetSegments(IAnsiConsole console, RenderOptions options, IEnumerable<IRenderable> renderables)
     {
         var result = new List<Segment>();
