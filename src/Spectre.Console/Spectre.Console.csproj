@@ -8,7 +8,11 @@
  
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Jumbee.Console"/>
+    <!-- Jumbee.Console consumes Spectre only through public API (the fork exposes what it needs), so it is
+         intentionally NOT a friend: granting it internals surfaces internal helpers (Cell, ListExtensions,
+         EnumerableExtensions) that collide with ConsoleGUI/Interop types. RazorConsole.Core.Syntax needs the
+         internal zero-copy Segment slice ctor for its direct-segment highlighter. -->
+    <InternalsVisibleTo Include="RazorConsole.Core.Syntax"/>
     <InternalsVisibleTo Include="Spectre.Console.Tests"/>
   </ItemGroup>
 
