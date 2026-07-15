@@ -664,7 +664,12 @@ public class Segment
         for (var i = 0; i < span.Length; i++)
         {
             var width = UnicodeCalculator.GetWidth(span[i]);
-            if (length + width > maxCellLength)
+
+            // Only break when the run so far is non-empty (i > start). A single glyph wider than maxCellLength — a
+            // 2-cell CJK/fullwidth character on a 1-cell line — cannot be folded any further, so it is emitted on its
+            // own oversized slice. Breaking before it instead would add an EMPTY slice and leave the glyph unconsumed,
+            // which makes the caller (Paragraph's wrap loop) re-split the same glyph forever.
+            if (length + width > maxCellLength && i > start)
             {
                 list.Add(text[start..i]);
                 start = i;
@@ -687,14 +692,18 @@ public class Segment
         var sb = new StringBuilder();
         foreach (var ch in text)
         {
-            if (length + UnicodeCalculator.GetWidth(ch) > maxCellLength)
+            var width = UnicodeCalculator.GetWidth(ch);
+
+            // Only break when the run so far is non-empty — see the ReadOnlyMemory overload above: a glyph wider than
+            // maxCellLength is indivisible and must be emitted rather than preceded by an empty slice.
+            if (length + width > maxCellLength && sb.Length > 0)
             {
                 list.Add(sb.ToString());
                 sb.Clear();
                 length = 0;
             }
 
-            length += UnicodeCalculator.GetWidth(ch);
+            length += width;
             sb.Append(ch);
         }
 

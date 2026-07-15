@@ -227,7 +227,10 @@ public sealed class Paragraph : Renderable, IHasJustification, IOverflowable
                 var segments = Segment.SplitOverflow(current, Overflow, maxWidth);
                 if (segments.Count > 0)
                 {
-                    if (line.CellCount() + segments[0].CellCount() > maxWidth)
+                    // Only wrap to a new line when there is something to wrap away from. If the line is already empty
+                    // and the piece STILL doesn't fit, it is indivisible (a 2-cell glyph on a 1-cell line) — take it
+                    // anyway, overflowing. Re-queueing it onto another empty line would never make progress.
+                    if (line.Count > 0 && line.CellCount() + segments[0].CellCount() > maxWidth)
                     {
                         lines.Add(line);
                         line = [];
